@@ -290,7 +290,11 @@
             css += active + '::before { content: ""; position: absolute; left: 0.3em; top: 50%; ' +
                 'width: 0.4em; height: 0.4em; margin-top: -0.2em; border-radius: 50%; background: #fff; }\n';
         }
-        if (style === 'bold') css += active + ' .menu__text { font-weight: 600; }\n';
+        // Толщина шрифта пунктов. На телевизорах штатный шрифт часто выглядит слишком тонким
+        var weight = parseInt(get('menu_font_weight', 'default'), 10) || 0;
+        if (weight) css += '.menu .menu__text { font-weight: ' + weight + '; }\n';
+        // «Жирный текст» должен быть заметно толще остальных пунктов, какую бы толщину ни выбрали
+        if (style === 'bold') css += active + ' .menu__text { font-weight: ' + Math.min(900, Math.max(600, weight + 200)) + '; }\n';
         // Остальные пункты приглушаются, текущий остаётся ярким — заметно и в меню-полоске
         if (style === 'dim') {
             css += '.menu .menu__item:not(.' + MENU_ACTIVE_CLASS + '):not(.focus):not(.hover):not(.traverse) { opacity: 0.5; }\n';
@@ -2471,6 +2475,24 @@
             },
             field: { name: 'Граница между группами', description: 'Как отделять группы друг от друга. Сами группы задаются в редакторе меню' },
             onChange: layoutMenu
+        });
+
+        Lampa.SettingsApi.addParam({
+            component: PAGE_MENU,
+            param: {
+                name: PLUGIN_ID + '_menu_font_weight',
+                type: 'select',
+                values: {
+                    'default': 'Как в Lampa',
+                    '400': 'Обычный',
+                    '500': 'Средний',
+                    '600': 'Полужирный',
+                    '700': 'Жирный'
+                },
+                default: 'default'
+            },
+            field: { name: 'Толщина шрифта', description: 'Если на телевизоре подписи пунктов выглядят слишком тонкими' },
+            onChange: applyStyles
         });
 
         param(PAGE_MENU, 'menu_compact', 'trigger', false, 'Компактное меню', 'Меньше отступы между пунктами — меню чаще помещается на экран целиком');
