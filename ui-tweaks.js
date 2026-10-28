@@ -293,6 +293,13 @@
         // Толщина шрифта пунктов. На телевизорах штатный шрифт часто выглядит слишком тонким
         var weight = parseInt(get('menu_font_weight', 'default'), 10) || 0;
         if (weight) css += '.menu .menu__text { font-weight: ' + weight + '; }\n';
+        // Тёмный текст на белом фоне выделенного пункта выглядит тоньше светлого на чёрном — ему своя толщина
+        var focusWeight = parseInt(get('menu_focus_font_weight', 'default'), 10) || 0;
+        if (focusWeight) {
+            css += ['focus', 'hover', 'traverse'].map(function (cls) {
+                return '.menu .menu__item.' + cls + ' .menu__text';
+            }).join(', ') + ' { font-weight: ' + focusWeight + '; }\n';
+        }
         // «Жирный текст» должен быть заметно толще остальных пунктов, какую бы толщину ни выбрали
         if (style === 'bold') css += active + ' .menu__text { font-weight: ' + Math.min(900, Math.max(600, weight + 200)) + '; }\n';
         // Остальные пункты приглушаются, текущий остаётся ярким — заметно и в меню-полоске
@@ -2492,6 +2499,24 @@
                 default: 'default'
             },
             field: { name: 'Толщина шрифта', description: 'Если на телевизоре подписи пунктов выглядят слишком тонкими' },
+            onChange: applyStyles
+        });
+
+        Lampa.SettingsApi.addParam({
+            component: PAGE_MENU,
+            param: {
+                name: PLUGIN_ID + '_menu_focus_font_weight',
+                type: 'select',
+                values: {
+                    'default': 'Как у остальных',
+                    '400': 'Обычный',
+                    '500': 'Средний',
+                    '600': 'Полужирный',
+                    '700': 'Жирный'
+                },
+                default: 'default'
+            },
+            field: { name: 'Толщина шрифта выделенного пункта', description: 'Тёмный текст на белом фоне кажется тоньше — его можно сделать толще остальных' },
             onChange: applyStyles
         });
 
