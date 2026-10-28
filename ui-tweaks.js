@@ -10,6 +10,7 @@
     var PAGE_SETTINGS = PLUGIN_ID + '_settings';
     var PAGE_ONLINE = PLUGIN_ID + '_online';
     var PAGE_CARDS = PLUGIN_ID + '_cards';
+    var PAGE_BG = PLUGIN_ID + '_bg';
 
     // Известные кнопки шапки Lampa: класс кнопки → подпись в настройках.
     // Кнопки, которые добавляют другие плагины, находятся автоматически (см. discoverHeadButtons)
@@ -141,6 +142,55 @@
     // Исходный текст рейтинга: вид меняет его содержимое, а Lampa сама его больше не пишет
     var CARD_VOTE_TEXT = PLUGIN_ID + '_vote_text';
     var CARD_VOTE_COLORS = { high: '#4cd17f', mid: '#ffc93c', low: '#ff6b6b' };
+
+    // Фон приложения: от штатного #1d1f20 до чёрного. Холодный оттенок Lampa сохраняется
+    var BG_TONES = {
+        dim:    [22, 23, 24],
+        dark:   [15, 16, 17],
+        darker: [8, 9, 10],
+        black:  [0, 0, 0]
+    };
+
+    // Что Lampa красит своими серыми, а «Чёрный стиль» не трогает (кроме мобильной ширины).
+    // lift — насколько светлее фона: у Lampa меню настроек и окна на 9 светлее фона, поля ввода — на 6.
+    // edge — можно обвести по краю, чтобы панель не сливалась с почти чёрным фоном. Во весь экран — не нужно
+    var BG_SURFACES = [
+        { lift: 9, edge: true, sel: ['.modal__content', '.navigation-bar__body', '.discuss-rules', '.speedtest', '.ai-agent__core'] },
+        { lift: 6, edge: true, sel: ['.settings-input__content'] },
+        { lift: 6, sel: ['.settings-input--free', '.extensions'] },
+        { lift: 0, edge: true, sel: ['.bell__item'] },
+        { lift: 0, sel: ['.torrent-serial', '.console', '.pincode', '.media-loading'] }
+    ];
+
+    // Подложки за меню настроек, выбором из списка и окнами. У первых двух штатно прозрачная, у окон — 30%:
+    // на тёмном фоне текст панели ложится прямо на постеры и текст страницы
+    var BG_BACKDROPS = ['.settings__layer', '.selectbox__layer', '.modal'];
+
+    // Боковые панели: справа экран, обводка только с одной стороны — слева, а на телефоне (шторка снизу) — сверху.
+    // Закрытая панель стоит сразу за краем экрана, и её обводка выглядывала бы на экран — обводим только открытую
+    var BG_DRAWERS = ['.settings__content', '.selectbox__content'];
+    var BG_DRAWERS_OPEN = ['&.settings--open .settings__content', '&.selectbox--open .selectbox__content'];
+
+    // Выделенный пункт в меню настроек и списках — там, где у пункта без фокуса заливки нет.
+    // У Lampa он #353535 — на 24 светлее фона, насколько светлее будет у нас — выбирается в настройках.
+    // Тем же цветом — обводка окон
+    var BG_FOCUSED = ['.settings-folder.focus', '.settings-param.focus', '.selectbox-item.focus', '.torrent-serial.focus',
+        '.torrent-file.focus', '.notice.focus', '.cub-premium__includes > div.focus'];
+
+    // Полупрозрачные светлые заливки кнопок и плашек: на тёмном фоне они ярче выделения, цвет — своя настройка.
+    // У кнопок с белым фокусом или выбранным состоянием их не трогаем.
+    // Плеер и то, что лежит на постерах, не трогаем — там через прозрачность видна картинка
+    var BG_FILLS = [
+        '.menu-edit-list__item:nth-child(even)', '.modal__button:not(.focus)',
+        '.search-history-key', '.search-source:not(.active)', '.simple-keyboard .hg-button', '.simple-keyboard-buttons__enter',
+        '&.true--mobile .search .simple-keyboard input', '.settings-input__links',
+        '.reaction-ask__item', '.discuss-rules-helper', '.account-modal__icon', '.account-modal__site',
+        '.broadcast__device', '.notice__footer > div'
+    ];
+
+    // Фокус у этих кнопок: светлее их заливки на столько же, на сколько выделенный пункт светлее фона
+    var BG_FILLS_FOCUSED = ['.search-history-key.focus', '.search-source.focus:not(.active)',
+        '.simple-keyboard .hg-button.focus', '.simple-keyboard .hg-button.hg-activeButton', '.simple-keyboard .hg-button:hover'];
 
     var LIST_ICON ='<svg viewBox="0 0 24 24" fill="currentColor"><path d="M3 5h2v2H3zm4 0h14v2H7zM3 11h2v2H3zm4 0h14v2H7zm-4 6h2v2H3zm4 0h14v2H7z"/></svg>';
 
@@ -359,6 +409,8 @@
         // Постеры в списках, обычные и широкие (.card--wide)
         css += cardCss();
 
+        css += bgCss();
+
         // Плотное меню: меньше воздуха между пунктами, чтобы список чаще помещался на экран
         if (isOn('menu_compact')) {
             css += '.menu .menu__item { padding-top: 0.6em; padding-bottom: 0.6em; }\n';
@@ -554,6 +606,56 @@
             css += vote + ', ' + poster + ' > .card__quality, ' + poster + ' > .card__type { z-index: 2; }\n';
         }
 
+        return css;
+    }
+
+    // Фон и всё, что лежит поверх него: меню настроек, выбор из списка, окна, поля ввода
+    function bgCss() {
+        var css = '';
+        var tone = BG_TONES[get('bg_tone', 'default')];
+        var surfaces = get('bg_surfaces', 'lift');
+        var edges = isOn('bg_edge');
+        var focusLift = parseInt(get('bg_focus', '16'), 10) || 16;
+        var fillLift = parseInt(get('bg_fill', '12'), 10) || 12;
+        // У «Чёрного стиля» тот же !important — перебиваем селектором с тем же весом, наш стиль подключён позже
+        if (tone) css += 'body, body.black--style { background: rgb(' + tone.join(', ') + ') !important; }\n';
+        if (surfaces === 'default') return css;
+
+        // Свой тон не выбран — чиним только «Чёрный стиль». Иначе фон штатный и красить нечего
+        var base = tone || [0, 0, 0];
+        // У стекла окна полупрозрачные — их оставляем как есть
+        var body = (tone ? 'body' : 'body.black--style') + ':not(.glass--style)';
+        function rgb(lift) {
+            return 'rgb(' + base.map(function (c) { return c + lift; }).join(', ') + ')';
+        }
+        // & в начале селектора, как в Sass, — сам body, иначе — элемент внутри него
+        function rule(sels, props) {
+            return sels.map(function (sel) {
+                return body + (sel.charAt(0) === '&' ? sel.slice(1) : ' ' + sel);
+            }).join(', ') + ' { ' + props + ' }\n';
+        }
+
+        // Сплошная серая, а не полупрозрачная белая — так тусклее
+        var edgeColor = rgb(focusLift);
+        var drawer = rgb(surfaces === 'same' ? 0 : 9) + ' !important;';
+        css += rule(BG_DRAWERS, 'background-color: ' + drawer);
+        if (edges) {
+            css += rule(BG_DRAWERS_OPEN, 'box-shadow: -0.1em 0 0 0 ' + edgeColor + ';');
+            css += '@media screen and (max-width: 480px) { ' + rule(BG_DRAWERS_OPEN, 'box-shadow: 0 -0.1em 0 0 ' + edgeColor + ';') + '}\n';
+        }
+
+        BG_SURFACES.forEach(function (group) {
+            var lift = surfaces === 'same' ? 0 : group.lift;
+            // Обводка снаружи: часть, что у края экрана, уходит за экран
+            var edge = edges && group.edge ? ' box-shadow: 0 0 0 0.1em ' + edgeColor + ';' : '';
+            css += rule(group.sel, 'background-color: ' + rgb(lift) + ' !important;' + edge);
+        });
+        // !important — иначе выделенную строку серии торрента перебьёт заливка из BG_SURFACES.
+        // Фокус перебивает обычное состояние: селектор у него точнее
+        css += rule(BG_FOCUSED, 'background-color: ' + rgb(focusLift) + ' !important;');
+        css += rule(BG_FILLS, 'background-color: ' + rgb(fillLift) + ' !important;');
+        css += rule(BG_FILLS_FOCUSED, 'background-color: ' + rgb(fillLift + focusLift) + ' !important;');
+        css += rule(BG_BACKDROPS, 'background-color: rgba(0, 0, 0, 0.7);');
         return css;
     }
 
@@ -2721,6 +2823,96 @@
         });
     }
 
+    function addBgPage() {
+        title(PAGE_BG, 'bg_title_page', 'Фон');
+
+        Lampa.SettingsApi.addParam({
+            component: PAGE_BG,
+            param: {
+                name: PLUGIN_ID + '_bg_tone',
+                type: 'select',
+                values: {
+                    'default': 'Как в Lampa',
+                    dim: 'Темнее',
+                    dark: 'Тёмный',
+                    darker: 'Почти чёрный',
+                    black: 'Чёрный'
+                },
+                default: 'default'
+            },
+            field: { name: 'Цвет фона', description: 'Между штатным серым и чёрным. «Как в Lampa» учитывает «Чёрный стиль» из раздела «Интерфейс»' },
+            onChange: applyStyles
+        });
+
+        title(PAGE_BG, 'bg_title_windows', 'Окна');
+
+        Lampa.SettingsApi.addParam({
+            component: PAGE_BG,
+            param: {
+                name: PLUGIN_ID + '_bg_surfaces',
+                type: 'select',
+                values: {
+                    'default': 'Как в Lampa',
+                    lift: 'Чуть светлее фона',
+                    same: 'В цвет фона'
+                },
+                default: 'lift'
+            },
+            field: {
+                name: 'Цвет окон',
+                description: 'Меню настроек, списки выбора и окна. Lampa красит их своим серым, даже когда фон тёмный или чёрный. ' +
+                    '«Как в Lampa» — не перекрашивать ни окна, ни выделение с кнопками. Со стеклом не меняются'
+            },
+            onChange: applyStyles
+        });
+
+        param(PAGE_BG, 'bg_edge', 'trigger', false, 'Обводка окон',
+            'Тонкая черта по краю, чтобы на тёмном фоне было видно, где окно кончается. Цвет — как у выделенного пункта');
+
+        title(PAGE_BG, 'bg_title_items', 'Выделение и кнопки');
+
+        Lampa.SettingsApi.addParam({
+            component: PAGE_BG,
+            param: {
+                name: PLUGIN_ID + '_bg_focus',
+                type: 'select',
+                values: {
+                    '10': 'Едва заметное',
+                    '16': 'Приглушённое',
+                    '24': 'Как в Lampa',
+                    '36': 'Яркое'
+                },
+                default: '16'
+            },
+            field: {
+                name: 'Выделенный пункт',
+                description: 'Насколько светлее фона пункт под фокусом в меню настроек и списках. На тёмном фоне штатное выглядит ярче'
+            },
+            onChange: applyStyles
+        });
+
+        Lampa.SettingsApi.addParam({
+            component: PAGE_BG,
+            param: {
+                name: PLUGIN_ID + '_bg_fill',
+                type: 'select',
+                values: {
+                    '8': 'Едва заметные',
+                    '12': 'Приглушённые',
+                    '20': 'Заметные',
+                    '28': 'Как в Lampa'
+                },
+                default: '12'
+            },
+            field: {
+                name: 'Кнопки и плашки',
+                description: 'Серые кнопки и плашки: в поиске, на клавиатуре, в окнах, полосы в редакторах. ' +
+                    'Кнопка под фокусом светлее своей на столько же, на сколько выделенный пункт светлее фона'
+            },
+            onChange: applyStyles
+        });
+    }
+
     function addSettings() {
         Lampa.SettingsApi.addComponent({
             component: PLUGIN_ID,
@@ -2739,6 +2931,7 @@
         pageLink(3, PAGE_ONLINE, 'Онлайн', 'Выбор сезона и озвучки, переход на следующий сезон');
         pageLink(4, PAGE_CARDS, 'Постеры', 'Рейтинг, качество и прогресс просмотра в списках');
         pageLink(5, PAGE_SETTINGS, 'Настройки', 'Порядок, группы и скрытие разделов');
+        pageLink(6, PAGE_BG, 'Фон', 'Цвет фона и окон, выделение и кнопки');
 
         loadHeadButtons();
         addMenuPage();
@@ -2746,6 +2939,7 @@
         addOnlinePage();
         addCardsPage();
         addSettingsPage();
+        addBgPage();
         discoverHeadButtons();
     }
 
